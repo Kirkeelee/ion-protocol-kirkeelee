@@ -1229,15 +1229,21 @@ contract IonPool_AdminTest is IonPoolSharedSetup {
 
         vm.expectEmit(true, true, true, true);
         emit IlkInitialized(prevIlkCount, newIlkAddress);
-        ionPool.initializeIlk(newIlkAddress);
+
+        ionPool.initializeIlk(newIlkAddress); 
+
+        uint8 ilkindex = ionPool.getIlkIndex(newIlkAddress);
+        address ilkaddress = ionPool.getIlkAddress(ilkindex);
 
         assertEq(ionPool.ilkCount(), prevIlkCount + 1);
-        assertEq(ionPool.totalNormalizedDebt(prevIlkCount), 0);
+        assertEq(newIlkAddress, ilkaddress);
+        assertEq(ionPool.totalNormalizedDebt(ilkindex), 0);
         assertEq(ionPool.rate(prevIlkCount), RAY);
-        assertEq(ionPool.lastRateUpdate(prevIlkCount), block.timestamp);
-        assertEq(address(ionPool.spot(prevIlkCount)), address(0));
-        assertEq(ionPool.debtCeiling(prevIlkCount), 0);
-        assertEq(ionPool.dust(prevIlkCount), 0);
+        assertEq(ionPool.rate(ilkindex), RAY);
+        assertEq(ionPool.lastRateUpdate(ilkindex), block.timestamp);
+        assertEq(address(ionPool.spot(ilkindex)), address(0));
+        assertEq(ionPool.debtCeiling(ilkindex), 0);
+        assertEq(ionPool.dust(ilkindex), 0);
 
         vm.expectRevert(abi.encodeWithSelector(IonPool.IlkAlreadyAdded.selector, newIlkAddress));
         ionPool.initializeIlk(newIlkAddress);

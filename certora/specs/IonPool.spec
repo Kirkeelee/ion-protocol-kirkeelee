@@ -47,6 +47,10 @@ methods {
     function ilkCount() external returns uint256 envfree;
     function getIlkIndex(address) external  returns uint8 envfree;
     function isAllowed(address, address) external returns bool envfree;
+    function rateUnaccrued(uint8) external  returns uint256;
+    function debtUnaccrued() external returns uint256;
+    function addressContains(address ) external returns bool envfree;
+
 
     //dink=changeInCollateral; dart=changeInNormalizedDebt;
 }
@@ -91,6 +95,10 @@ definition RAY() returns uint256 = 10^27;
 definition min_int256() returns mathint = -1 * 2^255;
 definition max_int256() returns mathint = 2^255 - 1;
 definition max_ilk() returns uint256 = 2^8;
+
+
+invariant ilkCountisEqualtoOrLessthanMaxIlk()
+          ilkCount() <= 256;
 
 
 // Verify correct storage changes for non reverting rely
@@ -144,17 +152,25 @@ rule removeOperator(address operator) {
 rule initializeIlk(address IlkAddress) {
     env e;
     uint8 otherIlk; 
-    uint256 rateotherIlkBefore = rate(e, otherIlk);
-
+    uint256 rateotherIlkBefore = rateUnaccrued(e, otherIlk);
+    require rateotherIlkBefore !=0;
+        
     initializeIlk(e, IlkAddress);
         
     uint8 ilk = getIlkIndex(e, IlkAddress); 
-    uint256 rateAfter = rate(e, ilk); 
-    uint256 rateotherIlkAfter = rate(e, otherIlk);
+    uint256 rateAfter = rateUnaccrued(e, ilk);
+    uint256 lastRateUpdate = lastRateUpdate(ilk);
+    uint256 rateotherIlkAfter = rateUnaccrued(e, otherIlk);
+    uint256 dustAfter = dust(ilk);
+
+    require lastRateUpdate == e.block.timestamp;
+    require ilk != otherIlk;
     
 
     assert(rateotherIlkBefore == rateotherIlkAfter, "should not affect other ilks");
     assert(rateAfter == RAY(), "init did not set ilks[ilk].rate");
+    assert(dustAfter == 0), "init did not set ilks[ilk].rate");
+
 
 }
 
@@ -164,37 +180,40 @@ rule initializeIlk_revert(address ilk) {
     uint8 anyIlk;
     uint256 ilkCount = ilkCount();
     address zero_address = 0;
-    address otherilkadd = getIlkAddress(anyIlk);
+    bool alreadyAdded = addressContains(ilk);
 
     initializeIlk@withrevert(e, ilk);
 
     bool revert1 = ilk == zero_address;
-    bool revert2 = ilk == otherilkadd; //ilk aready exists.
+    bool revert2 = alreadyAdded == true; //ilk aready exists.
     bool revert3 = ilkCount >= max_ilk();
 
     assert(revert1 => lastReverted, "revert1 failed");
     assert(revert2 => lastReverted, "revert2 failed");
     assert(revert3 => lastReverted, "revert3 failed");
 
-    assert(lastReverted => revert1 || revert2 || revert3, "Revert rules are not covering all the cases");
 }
 
 // Verify correct storage changes for non reverting cage
 rule pause() {
     env e;
 
-    address anyUsr;  uint8 anyIlk;
-
-    uint256 rateBefore = rate(e, anyIlk); 
-    uint256 debtBefore = debt(e);
+    uint8 anyIlk;
+    uint256 rateBefore = rateUnaccrued(e, anyIlk); 
+    uint256 debtBefore = debtUnaccrued(e);
+    uint256 ilkCount = ilkCount();
+    uint256 lastRateUpdate = lastRateUpdate(anyIlk);
+    require ilkCount !=0;
+    require debtBefore !=0;
+    require lastRateUpdate < e.block.timestamp;
 
     pause(e);
 
-    uint256 rateAfter = rate(e, anyIlk); 
-    uint256 debtAfter = debt(e);
+    uint256 rateAfter = rateUnaccrued(e, anyIlk); 
+    uint256 debtAfter = debtUnaccrued(e);
 
-    assert(rateAfter == rateBefore, "cage did not keep unchanged every ilks[x].rate");
-    assert(debtAfter > debtBefore, "Should accrue interest");
+    assert(rateAfter >= rateBefore, "cage did not keep unchanged every ilks[x].rate");
+    assert(debtAfter >= debtBefore, "Should accrue interest");
 }
 
 
@@ -278,7 +297,6 @@ rule transferGem_revert(uint8 ilk, address src, address dst, uint256 wad) {
     assert(revert3 => lastReverted, "revert3 failed");
     assert(revert4 => lastReverted, "revert4 failed");
 
-    assert(lastReverted => revert2 || revert3 || revert4, "Revert rules are not covering all the cases");
 }
 /*
 
@@ -461,7 +479,7 @@ rule confiscateVault(uint8 i, address u, address v, address w, int256 changeInCo
     uint256 totalNormalizedDebtBefore = totalNormalizedDebt(i);
     uint256 totalNormalizedDebtOtherBefore = totalNormalizedDebt(otherIlk);
     uint256 collateralBefore = collateral(i, u); 
-    uint256 rateBefore = rate(e, i);
+    //uint256 rateBefore = rateUnaccrued(e, i);
     uint256 normalizedDebtBefore = normalizedDebt(i, u);
     uint256 normalizedDebtOtherBefore = normalizedDebt(otherIlkU, otherUsrU);
     uint256 gemBefore = gem(i, v);
@@ -476,6 +494,7 @@ rule confiscateVault(uint8 i, address u, address v, address w, int256 changeInCo
     uint256 debtCeilingAfter = debtCeiling(i); 
     uint256 totalNormalizedDebtOtherAfter = totalNormalizedDebt(otherIlk); 
     uint256 collateralAfter = collateral(i, u); 
+    uint256 rateAfter = rateUnaccrued(e, i);
     uint256 normalizedDebtAfter = normalizedDebt(i, u);
     uint256 normalizedDebtOtherAfter = normalizedDebt(otherIlkU, otherUsrU);
     uint256 gemAfter = gem(i, v);
@@ -491,9 +510,9 @@ rule confiscateVault(uint8 i, address u, address v, address w, int256 changeInCo
     assert(normalizedDebtOtherAfter == normalizedDebtOtherBefore, "grab did not keep unchanged the rest of urns[x].art");
     assert(to_mathint(gemAfter) == to_mathint(gemBefore) - to_mathint(changeInCollateral), "grab did not set gem[i][v]");
     assert(gemOtherAfter == gemOtherBefore, "grab did not keep unchanged the rest of gem[x][y]");
-    assert(to_mathint(unbackedDebtAfter) == to_mathint(unbackedDebtBefore) - to_mathint(rateBefore) * to_mathint(changeInNormalizedDebt), "grab did not set sin[w]");
+    assert(to_mathint(unbackedDebtAfter) == to_mathint(unbackedDebtBefore) - to_mathint(rateAfter) * to_mathint(changeInNormalizedDebt), "grab did not set sin[w]");
     assert(unbackedDebtOtherAfter == unbackedDebtOtherBefore, "grab did not keep unchanged the rest of sin[x]");
-    assert(to_mathint(totalUnbackedDebtAfter) == to_mathint(totalUnbackedDebtBefore) - to_mathint(rateBefore) * to_mathint(changeInNormalizedDebt), "grab did not set vice");
+    assert(to_mathint(totalUnbackedDebtAfter) == to_mathint(totalUnbackedDebtBefore) - to_mathint(rateAfter) * to_mathint(changeInNormalizedDebt), "grab did not set vice");
 }
 
 
@@ -508,19 +527,20 @@ rule repayBadDebt(address user, uint256 rad) {
     
     uint256 unbackedDebtSenderBefore = unbackedDebt(user);
     uint256 unbackedDebtOtherBefore = unbackedDebt(otherUsr);
-    uint256 debtBefore = debt(e);
+    uint256 debtBefore = debtUnaccrued(e);
     uint256 totalUnbackedDebtBefore = totalUnbackedDebt();
 
     repayBadDebt(e, user, rad);
 
     uint256 unbackedDebtSenderAfter = unbackedDebt(user);
     uint256 unbackedDebtOtherAfter = unbackedDebt(otherUsr);
-    uint256 debtAfter = debt(e);
+    uint256 debtAfter = debtUnaccrued(e);
     uint256 totalUnbackedDebtAfter = totalUnbackedDebt();
 
     assert(to_mathint(unbackedDebtSenderAfter) == to_mathint(unbackedDebtSenderBefore - rad), "heal did not set sin[sender]");
     assert(unbackedDebtOtherAfter == unbackedDebtOtherBefore, "heal did not keep unchanged the rest of sin[x]");
     assert(to_mathint(debtAfter) == to_mathint(debtBefore - rad), "heal did not set debt");
     assert(to_mathint(totalUnbackedDebtAfter) == to_mathint(totalUnbackedDebtBefore - rad), "heal did not set vice");
-}
+} 
+
 

@@ -51,3 +51,38 @@ rule basicFRule(env e) {
 
     assert underlyingBalanceAfter > underlyingBalanceBefore => underForPoolAfter > underForPoolBefore, "Unexpected balance change";
 }
+/*
+rule protocolLiquidation (env e) {
+    uint8 ilkIndex; 
+    address vault; 
+    address kpr;
+
+    liquidate(e, ilkIndex, vault, kpr);
+
+
+
+}
+
+rule secondbranchLiquidation (env e) {
+    uint8 ilkIndex; 
+    address vault; 
+    address kpr;
+
+    liquidate(e, ilkIndex, vault, kpr);
+
+
+
+}
+
+
+rule partialLiquidation (env e) {
+    uint8 ilkIndex; 
+    address vault; 
+    address kpr;
+
+    liquidate(e, ilkIndex, vault, kpr);
+
+
+
+}
+*/
