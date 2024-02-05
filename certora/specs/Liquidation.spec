@@ -31,6 +31,8 @@ function cvlMulDiv(uint x, uint y, uint denominator) returns uint {
 }
 
 rule basicFRule(env e) {
+
+    storage init = lastStorage;
     uint8 ilkIndex; 
     address vault; 
     address kpr;
@@ -41,8 +43,8 @@ rule basicFRule(env e) {
     uint256 underForPoolBefore = underlyingForPool.balanceOf(currentContract);
 
     // aliasing assumptions
-    // require vault != kpr;
-    // require e.msg.sender != currentContract;
+    require vault != kpr;
+    require e.msg.sender != currentContract;
 
     liquidate(e, ilkIndex, vault, kpr);
 
