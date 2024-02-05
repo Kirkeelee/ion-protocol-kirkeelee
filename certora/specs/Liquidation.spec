@@ -30,6 +30,8 @@ function cvlMulDiv(uint x, uint y, uint denominator) returns uint {
     return require_uint256(x*y/denominator);
 }
 
+definition RAY() returns uint256 = 10^27;
+
 rule basicFRule(env e) {
 
     storage init = lastStorage;
@@ -42,7 +44,6 @@ rule basicFRule(env e) {
     uint256 underlyingBalanceBefore = underlying.balanceOf(currentContract);
     uint256 underForPoolBefore = underlyingForPool.balanceOf(currentContract);
 
-    // aliasing assumptions
     require vault != kpr;
     require e.msg.sender != currentContract;
 
@@ -53,38 +54,15 @@ rule basicFRule(env e) {
 
     assert underlyingBalanceAfter > underlyingBalanceBefore => underForPoolAfter > underForPoolBefore, "Unexpected balance change";
 }
-/*
-rule protocolLiquidation (env e) {
-    uint8 ilkIndex; 
-    address vault; 
-    address kpr;
-
-    liquidate(e, ilkIndex, vault, kpr);
 
 
 
+rule repayamount{
+    env e;
+    uint8 ilkIndex;
+    address vaultAddress;
+
+   uint256 repayamount = getRepayAmt(e, ilkIndex, vaultAddress);
+
+    assert repayamount < RAY();
 }
-
-rule secondbranchLiquidation (env e) {
-    uint8 ilkIndex; 
-    address vault; 
-    address kpr;
-
-    liquidate(e, ilkIndex, vault, kpr);
-
-
-
-}
-
-
-rule partialLiquidation (env e) {
-    uint8 ilkIndex; 
-    address vault; 
-    address kpr;
-
-    liquidate(e, ilkIndex, vault, kpr);
-
-
-
-}
-*/
